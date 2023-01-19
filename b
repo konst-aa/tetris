@@ -1,6 +1,0 @@
-	linux-vdso.so.1 (0x00007ffef359f000)
-	libchicken.so.11 => /nix/store/pjxckafm68b5rxaxi7b1gxy1737wq2pd-chicken-5.3.0/lib/libchicken.so.11 (0x00007f0f82000000)
-	libm.so.6 => /nix/store/yzjgl0h6a3qh1mby405428f16xww37h0-glibc-2.35-224/lib/libm.so.6 (0x00007f0f81f20000)
-	libdl.so.2 => /nix/store/yzjgl0h6a3qh1mby405428f16xww37h0-glibc-2.35-224/lib/libdl.so.2 (0x00007f0f82455000)
-	libc.so.6 => /nix/store/yzjgl0h6a3qh1mby405428f16xww37h0-glibc-2.35-224/lib/libc.so.6 (0x00007f0f81c00000)
-	/nix/store/yzjgl0h6a3qh1mby405428f16xww37h0-glibc-2.35-224/lib/ld-linux-x86-64.so.2 => /nix/store/yzjgl0h6a3qh1mby405428f16xww37h0-glibc-2.35-224/lib64/ld-linux-x86-64.so.2 (0x00007f0f8245c000)

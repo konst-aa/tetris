@@ -1,6 +1,7 @@
 { pkgs ? import <nixpkgs> { } }: # a list of packages I want in all shells, even pure ones... Passed into devShell.
 [
   # needs java
+  pkgs.gdb
   pkgs.xclip
   pkgs.rnix-lsp
   pkgs.fzf

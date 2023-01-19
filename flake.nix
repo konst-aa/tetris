@@ -16,7 +16,6 @@
         with eggs; [
           pkgs.chicken
           pkgs.makeWrapper
-          #(pkgs.SDL2.override { withStatic = true; })
           pkgs.gnumake
           sdl2
           vector-lib
@@ -37,11 +36,11 @@
           mkdir -p $out/bin
           cp out $out/bin/chicken-tetris
 
-          # for f in $out/bin/*
-          # do 
-          #   wrapProgram $f \
-          #    --prefix PATH : "$out/bin:${pkgs.chicken}"
-          # done
+           for f in $out/bin/*
+           do 
+             wrapProgram $f \
+              --set CHICKEN_REPOSITORY_PATH $CHICKEN_REPOSITORY_PATH
+           done
           '';
         }
       ;
