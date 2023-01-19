@@ -15,6 +15,9 @@ rec {
       pkgs.SDL2
       srfi-1
     ];
+    configurePhase = ''
+      # export SDL2_LDFLAGS=$(sdl2-config --static-libs)
+    '';
   };
 
   srfi-1 = eggDerivation {

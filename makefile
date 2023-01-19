@@ -1,5 +1,6 @@
-tetris:
-	csc tetris.scm -o out
+compile:
+	csc main.scm -o out
 clean:
-	rm out
-	rm result
+	rm -f out
+	rm -f result
+	rm -f *.link
