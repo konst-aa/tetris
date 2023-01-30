@@ -56,7 +56,7 @@
     (lambda (rel-y)
         (values (vector-unfold 
           (lambda (rel-x)
-            (values (make-tile rel-x rel-y '#(255 0 0 255) #t) (+ rel-x)))
+            (values (make-tile rel-x rel-y '#(100 100 100 255) #t) (+ rel-x)))
           cols)))
     rows))
 
@@ -80,9 +80,7 @@
 
 
 (define game-grid
-  (make-grid 10 10 10 (gen-tiles 10 5)))
-
-(display (grid-tiles game-grid))
+  (make-grid 10 10 20 (gen-tiles 20 10)))
 
 (define (render-loop cont)
   (define curr-event (sdl2:poll-event! main-event))
@@ -107,6 +105,7 @@
   ;               #f
   ;               (sdl2:make-color 0 128 255))
   ;(sdl2:update-window-surface! window)
+  (sdl2:render-clear! renderer)
   (sdl2:render-present! renderer)
   (call/cc (lambda (cont) (render-loop cont)))
   (main))

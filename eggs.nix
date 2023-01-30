@@ -12,7 +12,20 @@ rec {
     };
 
     buildInputs = [
-      pkgs.SDL2
+      (pkgs.SDL2.overrideAttrs
+      (f: p: {
+        x11Support = true;
+        libX11 = true;
+        xorgproto = true;
+        libICE = true;
+        libXi = true;
+        libXScrnSaver = true;
+        libXcursor = true;
+        libXinerama = true;
+        libXext = true;
+        libXxf86vm = true;
+        libXrandr = true;
+      }))
       srfi-1
     ];
   };
@@ -27,7 +40,7 @@ rec {
     };
 
     buildInputs = [
-      
+
     ];
   };
 
@@ -41,7 +54,7 @@ rec {
     };
 
     buildInputs = [
-      
+
     ];
   };
 }
