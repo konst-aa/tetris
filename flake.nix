@@ -19,6 +19,7 @@
           pkgs.gnumake
           sdl2
           vector-lib
+          srfi-123
         ];
     in
     {
