@@ -140,7 +140,7 @@
         (all? (vector->list (vector-map (lambda (j tile) (tile-solid? tile)) row))))
       (grid-tiles grid)))
 
-  ; n^2 btw
+  ; n^2 btw don't want to impl the intervals way of doing it
   (vector-for-each
     (lambda (i full?)
       (if full?
@@ -161,7 +161,7 @@
       (cont "gg"))
 
   (set! current-shape (take-shape))
-  (set! cursor-row -2)
+  (set! cursor-row -1)
   (set! cursor-col 5))
 
 (define game-grid
@@ -188,7 +188,7 @@
 
 (define shapes (list->vector (list bar L Z T box)))
 
-(define cursor-row -2)
+(define cursor-row -1)
 (define cursor-col 5)
 
 (define (take-shape)
@@ -250,11 +250,13 @@
 
   (input-loop cont))
 
-(define RENDERS-PER-SECOND (round (/ 1000 60)))
+(define RENDERS-PER-SECOND 30)
+(define MS-PER-RENDER (round (/ 1000 RENDERS-PER-SECOND)))
 
 (define score 0)
+
 ;; increases with difficulty
-(define renders-per-tick 60)
+(define renders-per-tick RENDERS-PER-SECOND)
 (define render-count 1)
 
 (define (with-control proc)
@@ -263,7 +265,7 @@
     ((equal? res "gg") (sdl2:quit!) (exit))))
 
 (define (main)
-  (sdl2:delay! RENDERS-PER-SECOND)
+  (sdl2:delay! MS-PER-RENDER)
 
   (with-control input-loop) ;; respond to input
 
