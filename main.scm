@@ -49,9 +49,11 @@
   (solid? tile-solid? (setter tile-solid?)))
 
 (define-record-type shape
-  (make-shape points color)
+  (make-shape points offsets color)
   shape?
   (points shape-points)
+  (offsets offsets)
+  (rotation 0) ; 0 is spawn, 1 is right, 2 is 180, 3 is left
   (color shape-color))
 
 (define (gen-tiles rows cols)
