@@ -4,8 +4,9 @@
   (chicken-5 (import (prefix sdl2 "sdl2:"))))
 
 (import (vector-lib)
-        (chicken format)
+        (chicken memory representation)
         (chicken random)
+        (chicken time)
         (srfi-123))
 
 (sdl2:set-main-ready!)
@@ -13,7 +14,7 @@
 
 (on-exit sdl2:quit!)
 
-(define window (sdl2:create-window! "Hello, World!" 100 100 450 620))
+(define window (sdl2:create-window! "chicken-tetris" 100 100 450 620))
 (define renderer (sdl2:create-renderer! window))
 (define main-event (sdl2:make-event))
 
@@ -49,11 +50,11 @@
   (solid? tile-solid? (setter tile-solid?)))
 
 (define-record-type shape
-  (make-shape points offsets color)
+  (make-shape points offsets rotation color)
   shape?
   (points shape-points)
-  (offsets offsets)
-  (rotation 0) ; 0 is spawn, 1 is right, 2 is 180, 3 is left
+  (offsets shape-offsets)
+  (rotation shape-rotation (setter shape-rotation)) ; 0 is spawn, 1 is right, 2 is 180, 3 is left
   (color shape-color))
 
 (define (gen-tiles rows cols)
@@ -81,56 +82,78 @@
         row-vec))
     (grid-tiles grid)))
 
-(define (rotate-90 shape) ; 90 deg clockwise
-  (make-shape
-    (map (lambda (point)
-           (cons (cdr point) (- (car point))))
-         (shape-points shape))
-    (shape-color shape)))
+(define (rotate-clockwise shape)
+  (if (= (shape-rotation shape) 3)
+    0
+    (+ (shape-rotation shape) 1)))
 
-(define (stamp! shape color grid row col solidify?)
-  (define (stamp-offset! point)
-    (let* ((real-row (+ row (car point)))
-           (real-col (+ col (cdr point)))
-           (tile (if (>= real-row 0)
-                     (~ (~ (grid-tiles grid) real-row) real-col)
-                     #f)))
+(define (rotate-counterclockwise shape)
+  (if (= (shape-rotation shape) 0)
+    3
+    (- (shape-rotation shape) 1)))
+
+(define (nth-comp proc n)
+  (define (helper acc n)
+    (if (<= n 0)
+      acc
+      (helper (compose proc acc) (- n 1))))
+  (helper identity n))
+
+(define (rot-points shape)
+  (define (rot-90 p)
+    (cons (cdr p) (- (car p))))
+  (map (nth-comp rot-90 (shape-rotation shape))
+       (shape-points shape)))
+
+(define (point-op op . points)
+  (cons (apply op (map car points ))
+        (apply op (map cdr points))))
+
+(define (stamp! shape color grid pos solidify?)
+  (define (stamp-offset! offset)
+    (let* ((real-row (+ (car pos) (car offset)))
+           (real-col (+ (cdr pos) (cdr offset)))
+           (tile (if (and (>= real-row 0)
+                          (>= real-col 0)
+                          (< real-row (grid-rows game-grid))
+                          (< real-col (grid-cols game-grid)))
+                   (~ (~ (grid-tiles grid) real-row) real-col)
+                   #f)))
           (if tile
-              (begin (set! (tile-color tile) color)
-                     (if solidify?
-                         (set! (tile-solid? tile) #t))))))
-  (map stamp-offset! (shape-points shape)))
+            (begin (set! (tile-color tile) color)
+                   (if solidify?
+                     (set! (tile-solid? tile) #t))))))
+  (map stamp-offset! (rot-points shape)))
 
 (define (any? alist)
-  (foldr or #f alist))
+  (foldl or #f alist))
 
 (define (all? alist)
-  (foldr and #t alist))
+  (foldl and #t alist))
 
-(define (intersecting? shape grid row col)
-  (define (bounds-check point)
-    (let ((real-row (+ row (car point)))
-          (real-col (+ col (cdr point))))
+(define (intersecting? shape grid pos pos-offset)
+  (define (bounds-check shape-offset)
+    (let ((real-row (+ (car pos) (car shape-offset) (car pos-offset)))
+          (real-col (+ (cdr pos) (cdr shape-offset) (cdr pos-offset))))
          (or (< real-col 0)
              (>= real-row (grid-rows grid))
              (>= real-col (grid-cols grid))
              (if (>= real-row 0) ; row < 0 won't be rendered out of bounds
-                 (tile-solid? (~ (~ (grid-tiles grid) real-row) real-col))
-                 #f))))
-  (any? (map bounds-check (shape-points shape))))
+               (tile-solid? (~ (~ (grid-tiles grid) real-row) real-col))
+               #f))))
+  (any? (map bounds-check (rot-points shape))))
 
 (define (down! shape grid)
-  (define placed (intersecting? shape grid (+ cursor-row 1) cursor-col))
+  (define placed (intersecting? shape grid cursor (cons 1 0)))
 
   ;remove previous render
-  (stamp! current-shape (grid-color game-grid) game-grid cursor-row cursor-col #f)
+  (stamp! current-shape (grid-color game-grid) game-grid cursor #f)
 
   (if placed
-      (stamp! shape (shape-color shape) grid cursor-row cursor-col #t)
-      (begin
-        (set! cursor-row (+ cursor-row 1))
-        (stamp! current-shape (shape-color current-shape) game-grid cursor-row cursor-col #f)))
-
+    (stamp! shape (shape-color shape) grid cursor #t)
+    (begin
+      (set! (car cursor) (+ (car cursor) 1))
+      (stamp! current-shape (shape-color current-shape) game-grid cursor #f)))
   placed)
 
 (define (placed-effects! grid cont)
@@ -140,71 +163,126 @@
         (all? (vector->list (vector-map (lambda (j tile) (tile-solid? tile)) row))))
       (grid-tiles grid)))
 
-  ; n^2 btw don't want to impl the intervals way of doing it
+  ; n^2 btw too lazy to impl the right way
   (vector-for-each
     (lambda (i full?)
       (if full?
-          (set! (grid-tiles grid)
-                (vector-concatenate
-                  (list
-                    (gen-tiles 1 10) ; insert at the top
-                    (vector-copy (grid-tiles grid) 0 i)
-                    (if (< (+ i 1) (grid-rows grid)) ; below removed layer
-                        (vector-copy (grid-tiles grid) (+ i 1) (grid-rows grid))
-                        #()))))))
+        (set! (grid-tiles grid)
+          (vector-concatenate
+            (list
+              (gen-tiles 1 10) ; insert at the top
+              (vector-copy (grid-tiles grid) 0 i)
+              (if (< (+ i 1) (grid-rows grid)) ; below removed layer
+                (vector-copy (grid-tiles grid) (+ i 1) (grid-rows grid))
+                #()))))))
     full-rows)
 
   ; loss check
   (if (any? (vector->list (vector-map
                             (lambda (_ tile) (tile-solid? tile))
                             (~ (grid-tiles grid) 0))))
-      (cont "gg"))
+    (cont "gg"))
 
   (set! current-shape (take-shape))
-  (set! cursor-row -1)
-  (set! cursor-col 5))
+  (set! cursor (cons -1 5)))
 
 (define game-grid
   (make-grid 10 10 20 10 30 #(100 100 100 255) (gen-tiles 20 10)))
 
-(define bar
-  (make-shape (list (cons 0 0) (cons 0 -2) (cons 0 -1) (cons 0 1))
-              #(100 100 255 255)))
+;; https://tetris.wiki/Super_Rotation_System
+(define JLSTZ-offset
+  `#(,(list (cons 0 0) (cons 0 0) (cons 0 0) (cons 0 0) (cons 0 0))
+     ,(list (cons 0 0) (cons 0 1) (cons 1 1) (cons -2 0) (cons -2 1))
+     ,(list (cons 0 0) (cons 0 0) (cons 0 0) (cons 0 0) (cons 0 0))
+     ,(list (cons 0 0) (cons 0 -1) (cons 1 -1) (cons -2 0) (cons -2 -1))))
+
+(define I-offset
+  `#(,(list (cons 0 0) (cons 0 -1) (cons 0 2) (cons 0 -1) (cons 0 2))
+     ,(list (cons 0 -1) (cons 0 0) (cons 0 0) (cons -1 0) (cons 2 0))
+     ,(list (cons -1 -1) (cons -1 1) (cons -1 -2) (cons 0 1) (cons 0 -2))
+     ,(list (cons -1 0) (cons -1 0) (cons -1 0) (cons 1 0) (cons -2 0))))
+
+(define O-offset
+  `#(,(list (cons 0 0))
+     ,(list (cons 1 0))
+     ,(list (cons 1 -1))
+     ,(list (cons 0 -1))))
+
+(define J
+  (make-shape (list (cons -1 -1) (cons 0 -1) (cons 0 0) (cons 0 1))
+              JLSTZ-offset
+              0
+              #(24 7 250 255)))
 (define L
-  (make-shape (list (cons 0 0) (cons 0 -1) (cons 0 1) (cons -1 -1))
-              #(255 125 0 255)))
-
-(define Z
-  (make-shape (list (cons 0 0) (cons -1 0) (cons -1 1) (cons 0 -1))
-              #(0 255 0 255)))
-
+  (make-shape (list (cons 0 -1) (cons 0 0) (cons 0 1) (cons -1 1))
+              JLSTZ-offset
+              0
+              #(250 133 7 255)))
+(define S
+  (make-shape (list (cons 0 -1) (cons 0 0) (cons -1 0) (cons -1 1))
+              JLSTZ-offset
+              0
+              #(72 250 7 255)))
 (define T
-  (make-shape (list (cons 0 0) (cons 0 -1) (cons 0 1) (cons -1 0))
-              #(255 0 255 255)))
+  (make-shape (list (cons 0 -1) (cons -1 0) (cons 0 0) (cons 0 1))
+              JLSTZ-offset
+              0
+              #(116 34 240 255)))
+(define Z
+  (make-shape (list (cons -1 -1) (cons -1 0) (cons 0 0) (cons 0 1))
+              JLSTZ-offset
+              0
+              #(240 37 34 255)))
+(define I
+  (make-shape (list (cons 0 -1) (cons 0 0) (cons 0 1) (cons 0 2))
+              I-offset
+              0
+              #(85 221 242 255)))
+(define O
+  (make-shape (list (cons -1 0) (cons 0 0) (cons -1 1) (cons 0 1))
+              O-offset
+              0
+              #(236 240 34 255)))
 
-(define box
-  (make-shape (list (cons 0 0) (cons 0 1) (cons -1 0) (cons -1 1))
-              #(255 255 0 255)))
+(define shapes (list->vector (list J L S T Z I O)))
 
-(define shapes (list->vector (list bar L Z T box)))
-
-(define cursor-row -1)
-(define cursor-col 5)
+(define cursor (cons -1 5))
 
 (define (take-shape)
-  (~ shapes (pseudo-random-integer (vector-length shapes))))
+  (object-copy (~ shapes (pseudo-random-integer (vector-length shapes)))))
 
 (define current-shape (take-shape))
 
 (define (input-loop cont)
   (define ev (sdl2:poll-event! main-event))
   (if (not ev)
-      (cont 0))
+    (cont 0))
 
-  (define (try-col shape col)
-    (not (intersecting? shape game-grid cursor-row col)))
+  (define (try-offset shape offset)
+    (not (intersecting? shape game-grid cursor offset)))
 
-  (stamp! current-shape (grid-color game-grid) game-grid cursor-row cursor-col #f) ;remove previous render
+  (define (try-rotation! shape new-rot) ; bad code
+    (let* ((old-rot (shape-rotation shape))
+           (_ (set! (shape-rotation shape) new-rot))
+           (res (foldl (lambda (success offset)
+                         (cond
+                           (success success)
+                           ((try-offset current-shape offset)
+                            (set! (shape-rotation shape) new-rot)
+                            (set! cursor (point-op + cursor offset))
+                            #t)
+                           (else #f)))
+                       #f
+                       (map (lambda (p1 p2) (point-op - p1 p2))
+                            (~ (shape-offsets shape)
+                               old-rot)
+                            (~ (shape-offsets shape)
+                               new-rot)))))
+          (if (not res)
+            (set! (shape-rotation shape) old-rot))
+          res))
+
+  (stamp! current-shape (grid-color game-grid) game-grid cursor #f) ;remove previous render
 
   (case (sdl2:event-type ev)
         ;;((window)
@@ -219,30 +297,25 @@
          (case (sdl2:keyboard-event-sym ev)
                ((down)
                 (if (down! current-shape game-grid)
-                    (placed-effects! game-grid cont)))
+                  (placed-effects! game-grid cont)))
 
                ((left)
-                (if (try-col current-shape (- cursor-col 1))
-                    (set! cursor-col (- cursor-col 1))))
+                (if (try-offset current-shape (cons 0 -1))
+                  (set! (cdr cursor) (- (cdr cursor) 1))))
 
                ((right)
-                (if (try-col current-shape (+ cursor-col 1))
-                    (set! cursor-col (+ cursor-col 1))))
+                (if (try-offset current-shape (cons 0 1))
+                  (set! (cdr cursor) (+ (cdr cursor) 1))))
 
                ((up)
-                (let ((rotated (rotate-90 current-shape)))
-                     ; tries a bunch of offsets
-                     (foldl (lambda (success offset)
-                              (cond
-                                (success success)
-                                ((try-col rotated (+ cursor-col offset))
-                                 (set! current-shape rotated)
-                                 (set! cursor-col (+ cursor-col offset)))
-                                (else #f)))
-                            #f
-                            (list 0 -1 -2 1 2)))))))
+                (try-rotation! current-shape (rotate-clockwise current-shape)))
 
-  (stamp! current-shape (shape-color current-shape) game-grid cursor-row cursor-col #f)
+               ((x)
+                (try-rotation! current-shape (rotate-clockwise current-shape)))
+
+               ((z)
+                (try-rotation! current-shape (rotate-counterclockwise current-shape))))))
+  (stamp! current-shape (shape-color current-shape) game-grid cursor #f)
 
   ; render everything
   (render-grid! game-grid)
@@ -258,6 +331,7 @@
 ;; increases with difficulty
 (define renders-per-tick RENDERS-PER-SECOND)
 (define render-count 1)
+(define prev-render-time (current-process-milliseconds))
 
 (define (with-control proc)
   (define res (call/cc (lambda (cont) (proc cont))))
@@ -265,21 +339,25 @@
     ((equal? res "gg") (sdl2:quit!) (exit))))
 
 (define (main)
-  (sdl2:delay! MS-PER-RENDER)
+  ; make frame length uniform
+  (sdl2:delay! (- MS-PER-RENDER
+                  (modulo (- (current-process-milliseconds) prev-render-time)
+                          MS-PER-RENDER)))
+  (set! prev-render-time (current-process-milliseconds))
 
   (with-control input-loop) ;; respond to input
 
   ; force move down if the time is right
   (if (> render-count renders-per-tick)
-      (begin
-        (with-control
-          (lambda (cont)
-            (if (down! current-shape game-grid)
-                (placed-effects! game-grid cont))
-            (render-grid! game-grid)
-            (sdl2:render-present! renderer)))
-        (set! render-count 1))
-      (set! render-count (+ render-count 1)))
+    (begin
+      (with-control
+        (lambda (cont)
+          (if (down! current-shape game-grid)
+            (placed-effects! game-grid cont))
+          (render-grid! game-grid)
+          (sdl2:render-present! renderer)))
+      (set! render-count 1))
+    (set! render-count (+ render-count 1)))
 
   (main))
 
