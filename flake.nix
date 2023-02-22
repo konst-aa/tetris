@@ -18,6 +18,7 @@
           pkgs.makeWrapper
           pkgs.gnumake
           sdl2
+          sdl2-ttf
           vector-lib
           srfi-123
         ];
@@ -28,20 +29,22 @@
           src = ./.;
 
           name = "chicken-tetris";
-          # propagatedBuildInputs = [pkgs.chicken];
           buildInputs = defaultBuildInputs;
           buildPhase = ''
             make compile
           '';
           installPhase = ''
           mkdir -p $out/bin
+          mkdir -p $out/etc
+          cp -r fonts/ $out/etc/fonts
           cp out $out/bin/chicken-tetris
 
-           for f in $out/bin/*
-           do 
-             wrapProgram $f \
-              --set CHICKEN_REPOSITORY_PATH $CHICKEN_REPOSITORY_PATH
-           done
+          for f in $out/bin/*
+          do 
+            wrapProgram $f \
+             --set CHICKEN_REPOSITORY_PATH $CHICKEN_REPOSITORY_PATH \
+             --set CHICKEN_TETRIS_FONTS $out/etc/fonts
+          done
           '';
         }
       ;

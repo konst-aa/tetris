@@ -77,13 +77,13 @@
 
   (define shapes-vec (list->vector (list J L S T Z I O)))
 
-(define (nth-comp proc n)
-  (define (helper acc n)
-    (if (<= n 0)
-      acc
-      (helper (compose proc acc) (- n 1))))
+  (define (nth-comp proc n)
+    (define (helper acc n)
+      (if (<= n 0)
+        acc
+        (helper (compose proc acc) (- n 1))))
 
-  (helper identity n))
+    (helper identity n))
   (define (rot-points shape) ; rotated points
     (define (rot-90 p)
       (cons (cdr p) (- (car p))))

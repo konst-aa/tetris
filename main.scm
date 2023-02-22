@@ -1,10 +1,10 @@
-;; Compatible with both CHICKEN 4 and CHICKEN 5.
-(cond-expand
-  (chicken-4 (use (prefix sdl2 "sdl2:")))
-  (chicken-5 (import (prefix sdl2 "sdl2:"))))
+(import (prefix sdl2 "sdl2:")
+        (prefix sdl2-ttf "ttf:"))
 
 (import (vector-lib)
+        (chicken format)
         (chicken memory representation)
+        (chicken process-context)
         (chicken random)
         (chicken time)
         shapes
@@ -13,11 +13,16 @@
 
 (sdl2:set-main-ready!)
 (sdl2:init! '(video))
+(ttf:init!)
 
 (on-exit sdl2:quit!)
 
 (define window (sdl2:create-window! "chicken-tetris" 100 100 450 620))
 (define renderer (sdl2:create-renderer! window))
+(define font (ttf:open-font
+               (string-append (get-environment-variable "CHICKEN_TETRIS_FONTS")
+                              "/ComicSansMS3.ttf") 30))
+
 (define main-event (sdl2:make-event))
 
 ;; from reference https://gitlab.com/chicken-sdl2/chicken-sdl2-examples/-/blob/master/eggsweeper/eggsweeper.scm
@@ -97,14 +102,16 @@
   (vector-for-each
     (lambda (i full?)
       (if full?
-        (set! (grid-tiles grid)
-          (vector-concatenate
-            (list
-              (gen-tiles 1 10) ; insert at the top
-              (vector-copy (grid-tiles grid) 0 i)
-              (if (< (+ i 1) (grid-rows grid)) ; below removed layer
-                (vector-copy (grid-tiles grid) (+ i 1) (grid-rows grid))
-                #()))))))
+        (begin
+          (set! score (+ score 1))
+          (set! (grid-tiles grid)
+            (vector-concatenate
+              (list
+                (gen-tiles 1 10) ; insert at the top
+                (vector-copy (grid-tiles grid) 0 i)
+                (if (< (+ i 1) (grid-rows grid)) ; below removed layer
+                  (vector-copy (grid-tiles grid) (+ i 1) (grid-rows grid))
+                  #())))))))
     full-rows)
 
   ; loss check
@@ -116,6 +123,7 @@
   (set! current-shape (take-shape))
   (set! cursor (cons -1 5)))
 
+
 (define game-grid
   (make-grid 10 10 20 10 30 #(100 100 100 255) (gen-tiles 20 10)))
 
@@ -126,7 +134,7 @@
 
 (define current-shape (take-shape))
 
-(define (input-loop cont)
+(define (input-loop! cont)
   (define ev (sdl2:poll-event! main-event))
   (if (not ev)
     (cont 0))
@@ -194,7 +202,7 @@
   (render-grid! renderer game-grid)
   (sdl2:render-present! renderer)
 
-  (input-loop cont))
+  (input-loop! cont))
 
 (define RENDERS-PER-SECOND 30)
 (define MS-PER-RENDER (round (/ 1000 RENDERS-PER-SECOND)))
@@ -211,6 +219,20 @@
   (cond
     ((equal? res "gg") (sdl2:quit!) (exit))))
 
+(define (render-score! renderer score)
+  (let* ((score-string (sprintf "score: ~A" score))
+         (text-surf (ttf:render-utf8-shaded font
+                                            score-string
+                                            (sdl2:make-color 0 0 0)
+                                            (sdl2:make-color 255 255 255))))
+        (sdl2:render-copy! renderer
+                           (sdl2:create-texture-from-surface renderer text-surf)
+                           #f
+                           (sdl2:make-rect 310 10
+                                           (* 10 (length (string->list score-string)))
+                                           40))))
+(define prev-score-quotient 0)
+
 (define (main)
   ; make frame length uniform
   (sdl2:delay! (- MS-PER-RENDER
@@ -218,7 +240,13 @@
                           MS-PER-RENDER)))
   (set! prev-render-time (current-process-milliseconds))
 
-  (with-control input-loop) ;; respond to input
+  (with-control input-loop!) ;; respond to input
+
+  (let* ((q (quotient score 10))
+         (quotient-diff (- q prev-score-quotient)))
+        (if (< q 30)
+          (set! renders-per-tick (- renders-per-tick quotient-diff)))
+        (set! prev-score-quotient q))
 
   ; force move down if the time is right
   (if (> render-count renders-per-tick)
@@ -227,6 +255,7 @@
         (lambda (cont)
           (if (down! current-shape game-grid)
             (placed-effects! game-grid cont))
+          (render-score! renderer score)
           (render-grid! renderer game-grid)
           (sdl2:render-present! renderer)))
       (set! render-count 1))

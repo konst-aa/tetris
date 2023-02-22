@@ -74,6 +74,22 @@ rec {
       pkgs.SDL2
     ];
   };
+  sdl2-ttf = eggDerivation {
+    name = "sdl2-ttf-0.2.0";
+
+    src = fetchegg {
+      name = "sdl2-ttf";
+      version = "0.2.0";
+      sha256 = "0rz4harq6vbkd49cfjzazy7iz183qmy35sx9j61hqzkrvsilrcaz";
+    };
+
+    buildInputs = [
+      sdl2
+      miscmacros
+      pkgs.SDL2_ttf
+      srfi-1
+    ];
+  };
 
   srfi-1 = eggDerivation {
     name = "srfi-1-0.5.1";
