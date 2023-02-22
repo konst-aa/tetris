@@ -49,7 +49,7 @@
                   cols)))
       rows))
 
-  (define (render-grid! grid)
+  (define (render-grid! renderer grid)
     (define (rectangle-wrapper tile row col)
       (define width (grid-tile-width grid))
       (sdl2:make-rect (+ (grid-x grid) (* width col))

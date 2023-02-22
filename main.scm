@@ -8,6 +8,7 @@
         (chicken random)
         (chicken time)
         shapes
+        grid
         (srfi-123))
 
 (sdl2:set-main-ready!)
@@ -33,12 +34,6 @@
 (set! (sdl2:event-state 'mouse-button-down) #f)
 (set! (sdl2:event-state 'mouse-motion) #f)
 
-(define (nth-comp proc n)
-  (define (helper acc n)
-    (if (<= n 0)
-      acc
-      (helper (compose proc acc) (- n 1))))
-  (helper identity n))
 
 (define (point-op op . points)
   (cons (apply op (map car points ))
@@ -196,7 +191,7 @@
   (stamp! current-shape (shape-color current-shape) game-grid cursor #f)
 
   ; render everything
-  (render-grid! game-grid)
+  (render-grid! renderer game-grid)
   (sdl2:render-present! renderer)
 
   (input-loop cont))
@@ -232,7 +227,7 @@
         (lambda (cont)
           (if (down! current-shape game-grid)
             (placed-effects! game-grid cont))
-          (render-grid! game-grid)
+          (render-grid! renderer game-grid)
           (sdl2:render-present! renderer)))
       (set! render-count 1))
     (set! render-count (+ render-count 1)))
