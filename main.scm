@@ -7,6 +7,7 @@
         (chicken memory representation)
         (chicken random)
         (chicken time)
+        shapes
         (srfi-123))
 
 (sdl2:set-main-ready!)
@@ -32,66 +33,6 @@
 (set! (sdl2:event-state 'mouse-button-down) #f)
 (set! (sdl2:event-state 'mouse-motion) #f)
 
-(define-record-type grid
-  (make-grid x y rows cols tile-width bg-color tiles)
-  grid?
-  (x grid-x) ;; absolute position on window may be mutable eventually
-  (y grid-y)
-  (rows grid-rows)
-  (cols grid-cols)
-  (tile-width grid-tile-width (setter grid-tile-width)) ;; shooould be good enough for resizing
-  (bg-color grid-color)
-  (tiles grid-tiles (setter grid-tiles)))
-
-(define-record-type tile
-  (make-tile color solid?)
-  tile?
-  (color tile-color (setter tile-color))
-  (solid? tile-solid? (setter tile-solid?)))
-
-(define-record-type shape
-  (make-shape points offsets rotation color)
-  shape?
-  (points shape-points)
-  (offsets shape-offsets)
-  (rotation shape-rotation (setter shape-rotation)) ; 0 is spawn, 1 is right, 2 is 180, 3 is left
-  (color shape-color))
-
-(define (gen-tiles rows cols)
-  (vector-unfold
-    (lambda (row)
-      (values (vector-unfold
-                (lambda (col)
-                  (values (make-tile '#(100 100 100 255) #f) (+ col)))
-                cols)))
-    rows))
-
-(define (render-grid! grid)
-  (define (rectangle-wrapper tile row col)
-    (define width (grid-tile-width grid))
-    (sdl2:make-rect (+ (grid-x grid) (* width col))
-                    (+ (grid-y grid) (* width row))
-                    width
-                    width))
-  (vector-map
-    (lambda (i row-vec)
-      (vector-map
-        (lambda (j tile)
-          (sdl2:render-draw-color-set! renderer (apply sdl2:make-color (vector->list (tile-color tile))))
-          (sdl2:render-fill-rect! renderer (rectangle-wrapper tile i j)))
-        row-vec))
-    (grid-tiles grid)))
-
-(define (rotate-clockwise shape)
-  (if (= (shape-rotation shape) 3)
-    0
-    (+ (shape-rotation shape) 1)))
-
-(define (rotate-counterclockwise shape)
-  (if (= (shape-rotation shape) 0)
-    3
-    (- (shape-rotation shape) 1)))
-
 (define (nth-comp proc n)
   (define (helper acc n)
     (if (<= n 0)
@@ -99,15 +40,15 @@
       (helper (compose proc acc) (- n 1))))
   (helper identity n))
 
-(define (rot-points shape)
-  (define (rot-90 p)
-    (cons (cdr p) (- (car p))))
-  (map (nth-comp rot-90 (shape-rotation shape))
-       (shape-points shape)))
-
 (define (point-op op . points)
   (cons (apply op (map car points ))
         (apply op (map cdr points))))
+
+(define (any? alist)
+  (foldl or #f alist))
+
+(define (all? alist)
+  (foldl and #t alist))
 
 (define (stamp! shape color grid pos solidify?)
   (define (stamp-offset! offset)
@@ -124,12 +65,6 @@
                    (if solidify?
                      (set! (tile-solid? tile) #t))))))
   (map stamp-offset! (rot-points shape)))
-
-(define (any? alist)
-  (foldl or #f alist))
-
-(define (all? alist)
-  (foldl and #t alist))
 
 (define (intersecting? shape grid pos pos-offset)
   (define (bounds-check shape-offset)
@@ -189,67 +124,10 @@
 (define game-grid
   (make-grid 10 10 20 10 30 #(100 100 100 255) (gen-tiles 20 10)))
 
-;; https://tetris.wiki/Super_Rotation_System
-(define JLSTZ-offset
-  `#(,(list (cons 0 0) (cons 0 0) (cons 0 0) (cons 0 0) (cons 0 0))
-     ,(list (cons 0 0) (cons 0 1) (cons 1 1) (cons -2 0) (cons -2 1))
-     ,(list (cons 0 0) (cons 0 0) (cons 0 0) (cons 0 0) (cons 0 0))
-     ,(list (cons 0 0) (cons 0 -1) (cons 1 -1) (cons -2 0) (cons -2 -1))))
-
-(define I-offset
-  `#(,(list (cons 0 0) (cons 0 -1) (cons 0 2) (cons 0 -1) (cons 0 2))
-     ,(list (cons 0 -1) (cons 0 0) (cons 0 0) (cons -1 0) (cons 2 0))
-     ,(list (cons -1 -1) (cons -1 1) (cons -1 -2) (cons 0 1) (cons 0 -2))
-     ,(list (cons -1 0) (cons -1 0) (cons -1 0) (cons 1 0) (cons -2 0))))
-
-(define O-offset
-  `#(,(list (cons 0 0))
-     ,(list (cons 1 0))
-     ,(list (cons 1 -1))
-     ,(list (cons 0 -1))))
-
-(define J
-  (make-shape (list (cons -1 -1) (cons 0 -1) (cons 0 0) (cons 0 1))
-              JLSTZ-offset
-              0
-              #(24 7 250 255)))
-(define L
-  (make-shape (list (cons 0 -1) (cons 0 0) (cons 0 1) (cons -1 1))
-              JLSTZ-offset
-              0
-              #(250 133 7 255)))
-(define S
-  (make-shape (list (cons 0 -1) (cons 0 0) (cons -1 0) (cons -1 1))
-              JLSTZ-offset
-              0
-              #(72 250 7 255)))
-(define T
-  (make-shape (list (cons 0 -1) (cons -1 0) (cons 0 0) (cons 0 1))
-              JLSTZ-offset
-              0
-              #(116 34 240 255)))
-(define Z
-  (make-shape (list (cons -1 -1) (cons -1 0) (cons 0 0) (cons 0 1))
-              JLSTZ-offset
-              0
-              #(240 37 34 255)))
-(define I
-  (make-shape (list (cons 0 -1) (cons 0 0) (cons 0 1) (cons 0 2))
-              I-offset
-              0
-              #(85 221 242 255)))
-(define O
-  (make-shape (list (cons -1 0) (cons 0 0) (cons -1 1) (cons 0 1))
-              O-offset
-              0
-              #(236 240 34 255)))
-
-(define shapes (list->vector (list J L S T Z I O)))
-
 (define cursor (cons -1 5))
 
 (define (take-shape)
-  (object-copy (~ shapes (pseudo-random-integer (vector-length shapes)))))
+  (object-copy (~ shapes-vec (pseudo-random-integer (vector-length shapes-vec)))))
 
 (define current-shape (take-shape))
 
