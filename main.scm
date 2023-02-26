@@ -187,7 +187,12 @@
                ((right)
                 (if (try-offset current-shape (cons 0 1))
                   (set! (cdr cursor) (+ (cdr cursor) 1))))
-
+               ((space)
+                ((rec (force-drop!)
+                      (let ((res (down! current-shape game-grid)))
+                           (if res
+                             (placed-effects! game-grid cont)
+                             (force-drop!))))))
                ((up)
                 (try-rotation! current-shape (rotate-clockwise current-shape)))
 
